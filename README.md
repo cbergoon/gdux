@@ -1,10 +1,10 @@
 <h3 align="center">Gdux</h3>
-<h4 align="center">A Redux Implementation Written in Golang</h4>
 <p align="center">
 <a href="https://travis-ci.org/cbergoon/gdux"><img src="https://travis-ci.org/cbergoon/gdux.svg?branch=master" alt="Build"></a>
 <a href="https://goreportcard.com/report/github.com/cbergoon/gdux"><img src="https://goreportcard.com/badge/github.com/cbergoon/gdux" alt="Report"></a>
 <a href="https://godoc.org/github.com/cbergoon/gdux"><img src="https://img.shields.io/badge/godoc-reference-brightgreen.svg" alt="Docs"></a>
 </p>
+<h4 align="center">A Redux Implementation Written in Golang</h4>
 
 State container and management API; like Redux but in Go. Gdux's implementation of the state management concepts 
 described below utilize channels to receive/trigger actions and also to notify subscribers. This is unique to Gdux and 
