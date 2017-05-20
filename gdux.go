@@ -6,17 +6,29 @@ import (
 	"github.com/pkg/errors"
 )
 
+//Store represents the Gdux state container.
 type Store struct {
-	currentState     State
-	currentStateLock sync.RWMutex //covers: 'currentState'
+	currentState     State        //currentState represents the state
+	currentStateLock sync.RWMutex //currentStateLock covers: 'currentState'
 
-	reducerFunction             Reducer
-	channelSubscriptionRegistry []RegistrableStateChannel
+	reducerFunction             Reducer                   //reducerFunction executed for each action
+	channelSubscriptionRegistry []RegistrableStateChannel //channelSubscriptionRegistry list of channels to send updated state on
 
-	TriggerChan chan Action
-	//quitChan    chan struct{}
+	options Options //options represents settings and configuration for store
+
+	actionRecord []Action //actionRecord history of actions if enabled
+
+	TriggerChan chan Action //triggerChan channel store receives actions
 }
 
+//Options represents options for the state.
+type Options struct {
+	Record     bool //Record indicates whether action history is stored
+	RecordSize int  //RecordSize sets limit on action history; 0 for no limit
+}
+
+//NewStore creates a new store with the initial state value and reducer function. Starts go routine listening for action.
+//Returns a pointer to the store and a possible error.
 func NewStore(state State, reducer Reducer) (*Store, error) {
 	if state == nil || reducer == nil {
 		return nil, errors.New("Error: Cannot create store with nil state or reducer.")
@@ -25,7 +37,7 @@ func NewStore(state State, reducer Reducer) (*Store, error) {
 		currentState:    state,
 		reducerFunction: reducer,
 		TriggerChan:     make(chan Action),
-		//quitChan:        make(chan struct{}),
+		options:         Options{},
 	}
 	go func(s *Store) {
 		for n := range s.TriggerChan {
@@ -35,34 +47,42 @@ func NewStore(state State, reducer Reducer) (*Store, error) {
 	return store, nil
 }
 
+//WithOptions sets options on the store.
+func (store *Store) WithOptions(options Options) {
+	store.options = options
+}
+
+//GetState returns the current state.
 func (store *Store) GetState() State {
 	store.currentStateLock.RLock()
 	defer store.currentStateLock.RUnlock()
 	return store.currentState
 }
 
+/*
 func (store *Store) SetState(state State) {
 	store.currentStateLock.Lock()
 	defer store.currentStateLock.Unlock()
 	store.currentState = state
 }
+*/
 
-//Register Subscription Channel
+//SubscriberChannel adds a channel to the list of channels that any updates to the state will be sent on.
 func (store *Store) SubscribeChannel(registree RegistrableStateChannel) {
 	store.registerSubscriptionChannel(registree)
 }
 
+//registerSubscriptionChannel internal only function to add a RegisterableStateChannel to the subscriber slice.
 func (store *Store) registerSubscriptionChannel(registree RegistrableStateChannel) {
 	store.channelSubscriptionRegistry = append(store.channelSubscriptionRegistry, registree)
 }
 
-//todo (cbergoon): need something to listen on these listener channels. fan-in mechanism. needs to be in order received.
-
-//Triggers
+//Trigger invokes a change in state with the provided action.
 func (store *Store) Trigger(action Action) {
 	store.trigger(action)
 }
 
+//triggerinternal only function that manages state changes.
 func (store *Store) trigger(action Action) {
 	store.currentStateLock.Lock()
 	newState, err := store.reducerFunction(store.currentState, action)
@@ -70,65 +90,60 @@ func (store *Store) trigger(action Action) {
 		//no-op on state
 	}
 	store.currentState = newState
+	if store.options.Record {
+		store.actionRecord = append(store.actionRecord, action)
+	}
+	if store.options.RecordSize != 0 {
+		for len(store.actionRecord) > store.options.RecordSize {
+			store.actionRecord = store.actionRecord[1:]
+		}
+	}
+	store.triggerNotifySubscribors()
+	//store.currentStateLock.Unlock()
 
-	store.currentStateLock.Unlock()
-	store.NotifySubscribers()
 }
 
-func (store *Store) NotifySubscribers() {
-	send := func(s *Store, sendChannel RegistrableStateChannel) {
-		store.currentStateLock.RLock()
-		sendChannel <- s.currentState
-		store.currentStateLock.RUnlock()
+//triggerNotifySubscribers called by trigger and sends changes to the state to the subscribers.
+func (store *Store) triggerNotifySubscribors() {
+	x := store.currentState
+	store.currentStateLock.Unlock()
+	send := func(s State, sendChannel RegistrableStateChannel) {
+		//store.currentStateLock.RLock()
+		sendChannel <- s
+		//store.currentStateLock.RUnlock()
 	}
 	for _, c := range store.channelSubscriptionRegistry {
-		send(store, c)
+		send(x, c)
 	}
 }
 
-type State interface {
-	Clone() State
+//NotifySubscribors sends changes to the state to the subscribers.
+func (store *Store) NotifySubscribers() {
+	store.currentStateLock.Lock()
+	x := store.currentState
+	store.currentStateLock.Unlock()
+	send := func(s State, sendChannel RegistrableStateChannel) {
+		//store.currentStateLock.RLock()
+		sendChannel <- s
+		//store.currentStateLock.RUnlock()
+	}
+	for _, c := range store.channelSubscriptionRegistry {
+		send(x, c)
+	}
 }
 
+//State is the interface that must be implemented for the state type.
+type State interface {
+	//Clone() State
+}
+
+//Actions is the interface all actions shouls implement.
 type Action interface {
 	GetType() string
 }
 
+//Reducer represents the signature for all reducer functions.
 type Reducer func(state State, action Action) (State, error)
 
-//type RegistrableFunction func(state State)//thought (might not want or need these)
 type RegistrableStateChannel chan State
 type RegistrableActionChannel <-chan Action
-
-func BasicReducer(state State, action Action) (State, error) {
-	if action.GetType() == "INC" {
-		tmp := state.(BasicState)
-		tmp.Accumulator += 1
-		tmp.LastAction = "INC"
-		return tmp, nil
-	} else if action.GetType() == "DEC" {
-		tmp := state.(BasicState)
-		tmp.Accumulator -= 1
-		tmp.LastAction = "DEC"
-		return tmp, nil
-	} else {
-		return state, nil
-	}
-}
-
-type BasicAction struct {
-	T string
-}
-
-func (action BasicAction) GetType() string {
-	return action.T
-}
-
-type BasicState struct {
-	Accumulator int
-	LastAction  string
-}
-
-func (state BasicState) Clone() State {
-	return state
-}
