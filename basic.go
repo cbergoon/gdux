@@ -28,9 +28,3 @@ type BasicState struct {
 	Accumulator int
 	LastAction  string
 }
-
-/*
-func (state BasicState) Clone() State {
-	return state
-}
-*/
