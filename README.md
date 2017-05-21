@@ -148,3 +148,4 @@ This project is licensed under the MIT License. See LICENSE file.
 * History and ability to replay; great for testing/debug
 * Combine reducers 
 * Be able to register function listeners (need to understand what scope the function would run within)
+* Middleware
