@@ -1,4 +1,4 @@
-<h3 align="center">Gdux</h3>
+<h2 align="center">Gdux</h2>
 <p align="center">
 <a href="https://travis-ci.org/cbergoon/gdux"><img src="https://travis-ci.org/cbergoon/gdux.svg?branch=master" alt="Build"></a>
 <a href="https://goreportcard.com/report/github.com/cbergoon/gdux"><img src="https://goreportcard.com/badge/github.com/cbergoon/gdux" alt="Report"></a>
